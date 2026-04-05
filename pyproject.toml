@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "email-triage-env"
+version = "1.0.0"
+description = "Real-world email triage environment with three difficulty tasks for AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Bhupender", email = "bhup2a1n@gmail.com"},
+]
+dependencies = [
+    "openenv-core>=0.2.0",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "openai",
+    "requests",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "black>=22.0", "isort>=5.10"]
+
+[project.scripts]
+server = "server.app:main"

@@ -1,0 +1,65 @@
+name: email-triage-env 
+version: 1.0.0  
+description: |
+  Real-world email triage environment for training AI agents. 
+  Tasks: flag urgent emails (easy), assign priority (medium), extract meeting info from conversation (hard).
+author: Bhupender
+license: MIT
+tags:  
+  - email
+  - triage
+  - real-world
+  - openenv
+
+observation_space:
+  type: object
+  properties:
+    current_email_subject:
+      type: string
+    current_email_body:
+      type: string
+    current_email_id:
+      type: integer
+    email_index:
+      type: integer
+    total_emails:
+      type: integer
+    done:
+      type: boolean
+    last_reward: 
+      type: number
+
+
+action_space:
+  type: object
+  properties:
+    action_type:
+      type: string 
+      enum: [set_priority, flag, archive, delete, reply]
+    parameters:
+      type: object
+      properties:
+        priority:
+          type: string
+          enum: [high, medium, low]
+        reply_text:
+          type: string
+
+reward_space:
+  type: number
+  minimum: -0.5
+  maximum: 1.0 
+
+tasks:
+  - id: easy
+    name: Flag Urgent Emails
+    description: Identify and flag emails containing urgency keywords (urgent, ASAP, deadline).
+    grader: grade_easy
+  - id: medium
+    name: Assign Priority Levels
+    description: Assign high/medium/low priority to each email based on content.
+    grader: grade_medium
+  - id: hard 
+    name: Conversation Reply with Extraction 
+    description: Extract meeting time and location from a thread and reply with confirmation.
+    grader: grade_hard

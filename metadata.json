@@ -1,0 +1,11 @@
+{
+  "name": "email-triage-env",
+  "version": "1.0.0",
+  "description": "Real-world email triage environment for training AI agents",
+  "author": "Bhupender",
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/email-triage-env",
+  "repository": "https://github.com/yourusername/email-triage-env",
+  "keywords": ["email", "triage", "ai", "agents", "openenv"],
+  "python": ">=3.10"
+}
