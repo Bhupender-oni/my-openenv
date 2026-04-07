@@ -1,4 +1,5 @@
 import os 
+import sys
 import json 
 import requests 
 import time 
@@ -42,59 +43,80 @@ def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, 
         
 def run_episode(task_id: str) -> float: 
     """Run one episode for given task, return grader score."""
-    # Print structured START block
+    # Print structured START block FIRST
     print(f"[START] task={task_id}", flush=True)
+    sys.stdout.flush()
     
-    # Reset environment  
-    reset_url = f"{ENV_URL}/reset" 
-    obs = None 
+    step_count = 0
+    score = 0.0
+    
     try:
-        resp = requests.get(reset_url, params={"task_id": task_id}, timeout=10) 
-        if resp.status_code == 200:
-            obs = resp.json()
-        else: 
-            resp = requests.post(reset_url, params={"task_id": task_id}, json={}, timeout=10)
-            resp.raise_for_status() 
-            obs = resp.json() 
-    except Exception as e: 
-        print(f"Reset failed: {e}")  
-        return 0.0
+        # Reset environment  
+        reset_url = f"{ENV_URL}/reset" 
+        obs = None 
+        try:
+            resp = requests.get(reset_url, params={"task_id": task_id}, timeout=10) 
+            if resp.status_code == 200:
+                obs = resp.json()
+            else: 
+                resp = requests.post(reset_url, params={"task_id": task_id}, json={}, timeout=10)
+                resp.raise_for_status() 
+                obs = resp.json() 
+        except Exception as e: 
+            print(f"Reset failed: {e}", flush=True)  
+            sys.stdout.flush()
+            print(f"[END] task={task_id} score=0.0 steps=0", flush=True)
+            sys.stdout.flush()
+            return 0.0
+        
+
+        if obs is None:
+            print("Reset did not return an observation", flush=True)
+            sys.stdout.flush()
+            print(f"[END] task={task_id} score=0.0 steps=0", flush=True)
+            sys.stdout.flush()
+            return 0.0 
+        
+        done = False 
+        max_steps = 20 # safety  
+
+        while not done and step_count < max_steps:  
+            # Get action using heuristics (no LLM)
+            action = get_action_from_llm(obs, task_id) 
+            # Send step request 
+            step_resp = requests.post(f"{ENV_URL}/step", json=action, timeout=10) 
+
+            if step_resp.status_code != 200: 
+                print(f"Step error: {step_resp.text}", flush=True)
+                sys.stdout.flush()
+                break 
+            data = step_resp.json() 
+            obs = data["observation"] 
+            reward = data["reward"]
+            done = data["done"] 
+            step_count += 1 
+            # Print structured STEP block
+            print(f"[STEP] step={step_count} reward={reward:.2f}", flush=True)
+            sys.stdout.flush()
+            time.sleep(0.1)
+
+        # Get grader score 
+        score_resp = requests.get(f"{ENV_URL}/score_task", params={"task_id": task_id}, timeout=10) 
+        if score_resp.status_code == 200:
+            score = score_resp.json()["score"]
+        else:
+            print(f"Score error: {score_resp.text}", flush=True)
+            sys.stdout.flush()
+            score = 0.0
     
-
-    if obs is None:
-        print("Reset did not return an observation")
-        return 0.0 
+    except Exception as e:
+        print(f"Episode exception: {e}", flush=True)
+        sys.stdout.flush()
+        score = 0.0
     
-    done = False 
-    step_count = 0 
-    max_steps = 20 # safety  
-
-    while not done and step_count < max_steps:  
-        # Get action using heuristics (no LLM)
-        action = get_action_from_llm(obs, task_id) 
-        # Send step request 
-        step_resp = requests.post(f"{ENV_URL}/step", json=action, timeout=10) 
-
-        if step_resp.status_code != 200: 
-            print(f"Step error: {step_resp.text}")
-            break 
-        data = step_resp.json() 
-        obs = data["observation"] 
-        reward = data["reward"]
-        done = data["done"] 
-        step_count += 1 
-        # Print structured STEP block
-        print(f"[STEP] step={step_count} reward={reward:.2f}", flush=True)
-        time.sleep(0.1)
-
-    # Get grader score 
-    score_resp = requests.get(f"{ENV_URL}/score_task", params={"task_id": task_id}, timeout=10) 
-    if score_resp.status_code != 200:
-        print(f"Score error: {score_resp.text}")
-        return 0.0 
-    score = score_resp.json()["score"]
-    # Print structured END block
+    # Print structured END block ALWAYS
     print(f"[END] task={task_id} score={score:.3f} steps={step_count}", flush=True)
+    sys.stdout.flush()
     return score 
 
 def main():
