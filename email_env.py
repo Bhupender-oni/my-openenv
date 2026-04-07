@@ -226,13 +226,14 @@ class EmailTriageEnv:
             "total_reward": self.total_reward, 
             "action_history": self.action_history
         }
-# ========== Graders (0.0-10) ==========
+
+# ========== Graders (scores strictly between 0 and 1) ==========
 # Simple Grader for Easy Task 
 def grade_easy(env: EmailTriageEnv) -> float:
     """Compute F1 score for flagging urgent emails."""
     history = env.action_history 
     if not history:
-        return 0.0
+        return 0.01  # Avoid 0.0
     true_pos = false_pos = false_neg = 0
     for item in history:
         # Determine if email was actually urgent
@@ -246,15 +247,16 @@ def grade_easy(env: EmailTriageEnv) -> float:
             false_neg += 1
     precision = true_pos / (true_pos + false_pos) if (true_pos + false_pos) > 0 else 0 
     recall = true_pos / (true_pos + false_neg) if (true_pos + false_neg) > 0 else 0
-    f1 = 2 * precision * recall/ (precision + recall) if (precision + recall) > 0 else 0
-    return f1 
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    # Clamp to (0.01, 0.99) to stay strictly between 0 and 1
+    return max(0.01, min(0.99, f1))
 
 # Grader for Medium Task
 def grade_medium(env: EmailTriageEnv) -> float:
     """Accuracy for priority assignment."""
     history = env.action_history 
     if not history:
-        return 0.0
+        return 0.01  # Avoid 0.0
     correct = 0
     for item in history:
         if item["action"] == ActionType.SET_PRIORITY:  
@@ -262,15 +264,16 @@ def grade_medium(env: EmailTriageEnv) -> float:
             if assigned == item["true_priority"]:
                 correct += 1
     
-    # Note: If agent never set_priority, correct stays 0 
-    return correct / len(history)
+    accuracy = correct / len(history)
+    # Clamp to (0.01, 0.99) to stay strictly between 0 and 1
+    return max(0.01, min(0.99, accuracy))
 
 # Grader for Hard Task
 def grade_hard(env: EmailTriageEnv) -> float:
     """Check if the final reply contains both time and location."""
     history = env.action_history 
     if not history:
-        return 0.0
+        return 0.01  # Avoid 0.0
     # Find the last REPLY action
     last_reply = None 
     for item in reversed(history):
@@ -278,23 +281,24 @@ def grade_hard(env: EmailTriageEnv) -> float:
             last_reply = item 
             break 
     if not last_reply: 
-        return 0.0 
+        return 0.01  # Avoid 0.0
     reply_text = last_reply["parameters"].get("reply_text", "")
     has_time = EXPECTED_EXTRACTION["time"].lower() in reply_text.lower()
     has_loc = EXPECTED_EXTRACTION["location"].lower() in reply_text.lower() 
 
     if has_time and has_loc:
-        return 1.0
+        return 0.99  # Avoid 1.0
     elif has_time or has_loc:
         return 0.5
     else:
-        return 0.0
+        return 0.01  # Avoid 0.0
     
 GRADERS = {
     "easy": grade_easy,
     "medium": grade_medium,
     "hard": grade_hard 
 }
+
 if __name__ == "__main__":
     # Quick test
     for task in ["easy", "medium", "hard"]:
@@ -323,13 +327,11 @@ if __name__ == "__main__":
                 action = Action(action_type=ActionType.SET_PRIORITY, parameters={"priority": priority})
             else: # hard
                 # Reply with extracted info if (assuming it's the last email) 
-                
                 action = Action(action_type=ActionType.REPLY, parameters=
                                 {"reply_text": "Confirmed. Time: 2pm, Location: Blue conference room."})
                 
-                obs, reward, done, info = env.step(action) 
-                print(f"Step: {obs.email_index}: {action.action_type.value} -> reward: {reward.value:.2f}")
+            obs, reward, done, info = env.step(action) 
+            print(f"Step: {obs.email_index}: {action.action_type.value} -> reward: {reward.value:.2f}")
 
-            score = GRADERS[task](env)  
-            print(f"Grader score for {task}: {score:.2f}")
-            
+        score = GRADERS[task](env)  
+        print(f"Grader score for {task}: {score:.3f}")
