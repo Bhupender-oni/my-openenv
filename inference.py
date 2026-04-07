@@ -42,6 +42,9 @@ def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, 
         
 def run_episode(task_id: str) -> float: 
     """Run one episode for given task, return grader score."""
+    # Print structured START block
+    print(f"[START] task={task_id}", flush=True)
+    
     # Reset environment  
     reset_url = f"{ENV_URL}/reset" 
     obs = None 
@@ -80,7 +83,8 @@ def run_episode(task_id: str) -> float:
         reward = data["reward"]
         done = data["done"] 
         step_count += 1 
-        print(f"Step {step_count}: action={action}, reward={reward:.2f}, done={done}") 
+        # Print structured STEP block
+        print(f"[STEP] step={step_count} reward={reward:.2f}", flush=True)
         time.sleep(0.1)
 
     # Get grader score 
@@ -89,20 +93,16 @@ def run_episode(task_id: str) -> float:
         print(f"Score error: {score_resp.text}")
         return 0.0 
     score = score_resp.json()["score"]
-    print(f"Episode finished. Steps: {step_count}, Grader score: {score:.3f}") 
+    # Print structured END block
+    print(f"[END] task={task_id} score={score:.3f} steps={step_count}", flush=True)
     return score 
 
 def main():
     tasks = ["easy", "medium", "hard"] 
     scores = {} 
     for task in tasks: 
-        print(f"\n=== Running task: {task} ===") 
         score = run_episode(task) 
         scores[task] = score 
-
-    print("\n=== Baseline Scores ===") 
-    for task, score in scores.items():
-        print(f"{task.capitalize()}: {score:.3f}") 
 
     # Save to file for reproducibility 
     with open("baseline_scores.json", "w") as f:
@@ -111,5 +111,4 @@ def main():
 if __name__ == "__main__":
     scores = {task: run_episode(task) for task in ["easy", "medium", "hard"]} 
     with open("baseline_scores.json", "w") as f:
-        json.dump(scores, f, indent=2) 
-    print("\nBaseline Scores:", scores)
+        json.dump(scores, f, indent=2)
