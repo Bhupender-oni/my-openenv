@@ -1,17 +1,21 @@
+#!/usr/bin/env python3
 import os 
 import sys
 import json 
 import requests 
 import time 
 from typing import Dict, Any 
-from dotenv import load_dotenv
 
-load_dotenv() 
+# Load environment first
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except:
+    pass
 
 # Environment Configuration 
 ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
 
-# Helper Functions
 def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, Any]:
     """Use heuristics instead of LLM - no API needed."""
     subject = observation['current_email_subject'].lower()
@@ -19,14 +23,12 @@ def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, 
     text = subject + " " + body
     
     if task_id == "easy":
-        # Flag if urgent keywords present
         if any(k in text for k in ["urgent", "asap", "deadline", "critical"]):
             return {"action_type": "flag", "parameters": {}}
         else:
             return {"action_type": "archive", "parameters": {}}
     
     elif task_id == "medium":
-        # Assign priority based on keywords
         if any(k in text for k in ["urgent", "deadline", "critical", "asap", "failure", "down"]):
             priority = "high"
         elif any(k in text for k in ["meeting", "reminder", "review", "team", "report", "sync"]):
@@ -36,24 +38,22 @@ def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, 
         return {"action_type": "set_priority", "parameters": {"priority": priority}}
     
     else:  # hard
-        # Always reply with meeting info on final email
         reply = "Confirmed. Meeting time: 2pm, Location: Blue conference room."
         return {"action_type": "reply", "parameters": {"reply_text": reply}}
 
         
 def run_episode(task_id: str) -> float: 
     """Run one episode for given task, return grader score."""
-    # Print structured START block FIRST
-    print(f"[START] task={task_id}", flush=True)
+    sys.stdout.write(f"[START] task={task_id}\n")
     sys.stdout.flush()
     
     step_count = 0
     score = 0.0
     
     try:
-        # Reset environment  
         reset_url = f"{ENV_URL}/reset" 
         obs = None 
+        
         try:
             resp = requests.get(reset_url, params={"task_id": task_id}, timeout=10) 
             if resp.status_code == 200:
@@ -63,74 +63,63 @@ def run_episode(task_id: str) -> float:
                 resp.raise_for_status() 
                 obs = resp.json() 
         except Exception as e: 
-            print(f"Reset failed: {e}", flush=True)  
+            sys.stdout.write(f"Reset failed: {e}\n")
             sys.stdout.flush()
-            print(f"[END] task={task_id} score=0.0 steps=0", flush=True)
+            sys.stdout.write(f"[END] task={task_id} score=0.0 steps=0\n")
             sys.stdout.flush()
             return 0.0
-        
 
         if obs is None:
-            print("Reset did not return an observation", flush=True)
+            sys.stdout.write("Reset did not return an observation\n")
             sys.stdout.flush()
-            print(f"[END] task={task_id} score=0.0 steps=0", flush=True)
+            sys.stdout.write(f"[END] task={task_id} score=0.0 steps=0\n")
             sys.stdout.flush()
             return 0.0 
         
         done = False 
-        max_steps = 20 # safety  
+        max_steps = 20
 
         while not done and step_count < max_steps:  
-            # Get action using heuristics (no LLM)
             action = get_action_from_llm(obs, task_id) 
-            # Send step request 
             step_resp = requests.post(f"{ENV_URL}/step", json=action, timeout=10) 
 
             if step_resp.status_code != 200: 
-                print(f"Step error: {step_resp.text}", flush=True)
+                sys.stdout.write(f"Step error: {step_resp.text}\n")
                 sys.stdout.flush()
                 break 
+            
             data = step_resp.json() 
             obs = data["observation"] 
             reward = data["reward"]
             done = data["done"] 
             step_count += 1 
-            # Print structured STEP block
-            print(f"[STEP] step={step_count} reward={reward:.2f}", flush=True)
+            
+            sys.stdout.write(f"[STEP] step={step_count} reward={reward:.2f}\n")
             sys.stdout.flush()
             time.sleep(0.1)
 
-        # Get grader score 
         score_resp = requests.get(f"{ENV_URL}/score_task", params={"task_id": task_id}, timeout=10) 
         if score_resp.status_code == 200:
             score = score_resp.json()["score"]
         else:
-            print(f"Score error: {score_resp.text}", flush=True)
+            sys.stdout.write(f"Score error: {score_resp.text}\n")
             sys.stdout.flush()
             score = 0.0
     
     except Exception as e:
-        print(f"Episode exception: {e}", flush=True)
+        sys.stdout.write(f"Episode exception: {e}\n")
         sys.stdout.flush()
         score = 0.0
     
-    # Print structured END block ALWAYS
-    print(f"[END] task={task_id} score={score:.3f} steps={step_count}", flush=True)
+    sys.stdout.write(f"[END] task={task_id} score={score:.3f} steps={step_count}\n")
     sys.stdout.flush()
     return score 
 
-def main():
-    tasks = ["easy", "medium", "hard"] 
-    scores = {} 
-    for task in tasks: 
-        score = run_episode(task) 
-        scores[task] = score 
-
-    # Save to file for reproducibility 
-    with open("baseline_scores.json", "w") as f:
-        json.dump(scores, f, indent=2)
 
 if __name__ == "__main__":
-    scores = {task: run_episode(task) for task in ["easy", "medium", "hard"]} 
-    with open("baseline_scores.json", "w") as f:
-        json.dump(scores, f, indent=2)
+    try:
+        for task in ["easy", "medium", "hard"]:
+            run_episode(task)
+    except Exception as e:
+        sys.stdout.write(f"Main exception: {e}\n")
+        sys.stdout.flush()
