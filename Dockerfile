@@ -12,5 +12,5 @@ COPY . .
 # Expose the port that Gradio runs on
 EXPOSE 7860 
 
-# Start FastAPI server in background and Gradio in foreground
-CMD ["sh", "-c", "python -m uvicorn server.app:app --host 0.0.0.0 --port 8000 & python app.py"]
+# Start FastAPI server
+CMD ["python", "-m", "uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Email Triage Agent - Prints structured output for validator parsing.
-Runs immediately on import/execution.
+Email Triage Agent - Must output [START]/[STEP]/[END] blocks.
 """
 import os 
 import sys
@@ -10,25 +9,19 @@ import requests
 import time 
 from typing import Dict, Any 
 
-# Ensure unbuffered output
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 1)
-sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 1)
-
-# Load environment
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except:
     pass
 
-# Environment Configuration 
 ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
 
 
 def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, Any]:
     """Use heuristics instead of LLM."""
-    subject = observation['current_email_subject'].lower()
-    body = observation['current_email_body'].lower()
+    subject = observation.get('current_email_subject', '').lower()
+    body = observation.get('current_email_body', '').lower()
     text = subject + " " + body
     
     if task_id == "easy":
@@ -53,14 +46,13 @@ def get_action_from_llm(observation: Dict[str, Any], task_id: str) -> Dict[str, 
         
 def run_episode(task_id: str) -> float: 
     """Run one episode and return score."""
-    print(f"[START] task={task_id}")
-    sys.stdout.flush()
+    # MUST print START immediately
+    print(f"[START] task={task_id}", flush=True)
     
     step_count = 0
     score = 0.0
     
     try:
-        # Reset environment
         reset_url = f"{ENV_URL}/reset" 
         obs = None 
         
@@ -73,13 +65,12 @@ def run_episode(task_id: str) -> float:
                 resp.raise_for_status() 
                 obs = resp.json() 
         except Exception as e: 
-            print(f"[END] task={task_id} score=0.0 steps=0")
-            sys.stdout.flush()
+            # Always print END, even on error
+            print(f"[END] task={task_id} score=0.0 steps=0", flush=True)
             return 0.0
 
         if obs is None:
-            print(f"[END] task={task_id} score=0.0 steps=0")
-            sys.stdout.flush()
+            print(f"[END] task={task_id} score=0.0 steps=0", flush=True)
             return 0.0 
         
         done = False 
@@ -93,36 +84,39 @@ def run_episode(task_id: str) -> float:
                 break 
             
             data = step_resp.json() 
-            obs = data["observation"] 
-            reward = data["reward"]
-            done = data["done"] 
+            obs = data.get("observation", obs)
+            reward = data.get("reward", 0.0)
+            done = data.get("done", False)
             step_count += 1 
             
-            print(f"[STEP] step={step_count} reward={reward:.2f}")
-            sys.stdout.flush()
+            print(f"[STEP] step={step_count} reward={reward:.2f}", flush=True)
             time.sleep(0.1)
 
-        score_resp = requests.get(f"{ENV_URL}/score_task", params={"task_id": task_id}, timeout=10) 
-        if score_resp.status_code == 200:
-            score = score_resp.json()["score"]
+        try:
+            score_resp = requests.get(f"{ENV_URL}/score_task", params={"task_id": task_id}, timeout=10) 
+            if score_resp.status_code == 200:
+                score = score_resp.json().get("score", 0.0)
+        except:
+            pass
     
     except Exception as e:
         pass
     
-    print(f"[END] task={task_id} score={score:.3f} steps={step_count}")
-    sys.stdout.flush()
+    # MUST print END with score and steps
+    print(f"[END] task={task_id} score={score:.3f} steps={step_count}", flush=True)
     return score 
 
 
 def main():
     """Run all tasks."""
-    for task in ["easy", "medium", "hard"]:
-        run_episode(task)
+    try:
+        for task in ["easy", "medium", "hard"]:
+            run_episode(task)
+    except Exception as e:
+        # Catch any uncaught exception
+        pass
 
 
-# Run immediately
+# Run when executed directly
 if __name__ == "__main__":
-    main()
-else:
-    # Also run if imported as a module
     main()
