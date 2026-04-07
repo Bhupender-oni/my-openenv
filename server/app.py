@@ -24,9 +24,19 @@ def get_env():
 
 
 @app.get("/reset")
-@app.post("/reset")
-def reset(task_id: str = "easy"):
+def reset_get(task_id: str = "easy"):
     """ Reset the environment to a new task (easy/medium/hard). """
+    if task_id not in GRADERS:
+        raise HTTPException(400, f"Unknown task. Choose from {list(GRADERS.keys())}")
+    global env 
+    env = EmailTriageEnv(task_id=task_id) 
+    obs = env.reset(task_id)
+    return obs.dict()
+
+
+@app.post("/reset")
+def reset_post(task_id: str = "easy"):
+    """ Reset the environment to a new task (easy/medium/hard) - POST version. """
     if task_id not in GRADERS:
         raise HTTPException(400, f"Unknown task. Choose from {list(GRADERS.keys())}")
     global env 
