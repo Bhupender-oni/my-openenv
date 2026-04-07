@@ -1,11 +1,10 @@
 .git
-.gitignore
+.venv
 __pycache__
 *.pyc
-.venv
-venv
 .env
-.vscode
-.idea
+outputs
+.dockerignore
+.gitignore
 README.md
-.DS_Store
+*.md
